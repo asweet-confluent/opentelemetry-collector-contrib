@@ -22,6 +22,8 @@ const (
 	defaultAggregationInterval = 60 * time.Second
 	defaultEnableMetricType    = false
 	defaultIsMonotonicCounter  = false
+	defaultProcessingQueueSize = 10
+	defaultNumParsingWorkers   = 3
 	defaultSocketPermissions   = os.FileMode(0o622)
 )
 
@@ -46,6 +48,8 @@ func createDefaultConfig() component.Config {
 		EnableMetricType:      defaultEnableMetricType,
 		IsMonotonicCounter:    defaultIsMonotonicCounter,
 		TimerHistogramMapping: defaultTimerHistogramMapping,
+		ProcessingQueueSize:   defaultProcessingQueueSize,
+		NumParsingWorkers:     defaultNumParsingWorkers,
 		SocketPermissions:     defaultSocketPermissions,
 	}
 }

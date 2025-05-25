@@ -25,7 +25,7 @@ func Test_ParseMessageToMetric(t *testing.T) {
 	tests := []struct {
 		name       string
 		input      string
-		wantMetric statsDMetric
+		wantMetric StatsDMetric
 		err        error
 	}{
 		{
@@ -301,9 +301,14 @@ func Test_ParseMessageToMetric(t *testing.T) {
 		},
 	}
 
+	worker := &Worker{
+		enableMetricType: false,
+		enableSimpleTags: false,
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseMessageToMetric(tt.input, false, false)
+			got, err := worker.Parse(tt.input, nil)
 
 			if tt.err != nil {
 				assert.Equal(t, tt.err, err)
@@ -319,7 +324,7 @@ func Test_ParseMessageToMetricWithMetricType(t *testing.T) {
 	tests := []struct {
 		name       string
 		input      string
-		wantMetric statsDMetric
+		wantMetric StatsDMetric
 		err        error
 	}{
 		{
@@ -529,9 +534,14 @@ func Test_ParseMessageToMetricWithMetricType(t *testing.T) {
 		},
 	}
 
+	worker := &Worker{
+		enableMetricType: true,
+		enableSimpleTags: false,
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseMessageToMetric(tt.input, true, false)
+			got, err := worker.Parse(tt.input, nil)
 
 			if tt.err != nil {
 				assert.Equal(t, tt.err, err)
@@ -547,7 +557,7 @@ func Test_ParseMessageToMetricWithSimpleTags(t *testing.T) {
 	tests := []struct {
 		name       string
 		input      string
-		wantMetric statsDMetric
+		wantMetric StatsDMetric
 		err        error
 	}{
 		{
@@ -594,9 +604,14 @@ func Test_ParseMessageToMetricWithSimpleTags(t *testing.T) {
 		},
 	}
 
+	worker := &Worker{
+		enableMetricType: false,
+		enableSimpleTags: true,
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseMessageToMetric(tt.input, false, true)
+			got, err := worker.Parse(tt.input, nil)
 
 			if tt.err != nil {
 				assert.Equal(t, tt.err, err)
@@ -613,13 +628,13 @@ func testStatsDMetric(
 	addition bool, metricType MetricType,
 	sampleRate float64, labelKeys []string,
 	labelValue []string, timestamp uint64,
-) statsDMetric {
+) StatsDMetric {
 	if len(labelKeys) > 0 {
 		var kvs []attribute.KeyValue
 		for n, k := range labelKeys {
 			kvs = append(kvs, attribute.String(k, labelValue[n]))
 		}
-		return statsDMetric{
+		return StatsDMetric{
 			description: statsDMetricDescription{
 				name:       name,
 				metricType: metricType,
@@ -632,7 +647,7 @@ func testStatsDMetric(
 			timestamp:  timestamp,
 		}
 	}
-	return statsDMetric{
+	return StatsDMetric{
 		description: statsDMetricDescription{
 			name:       name,
 			metricType: metricType,
@@ -1048,17 +1063,19 @@ func TestStatsDParser_Aggregate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var err error
+			var errs []error
 			p := &StatsDParser{}
 			assert.NoError(t, p.Initialize(false, false, false, false, []protocol.TimerHistogramMapping{{StatsdType: "timer", ObserverType: "gauge"}, {StatsdType: "histogram", ObserverType: "gauge"}}))
 			p.lastIntervalTime = time.Unix(611, 0)
 			addr, _ := net.ResolveUDPAddr("udp", "1.2.3.4:5678")
 			addrKey := newNetAddr(addr)
 			for _, line := range tt.input {
-				err = p.Aggregate(line, addr)
+				parsedMetric, err := (&Worker{}).Parse(line, addr)
+				errs = append(errs, err)
+				errs = append(errs, p.Aggregate(parsedMetric))
 			}
 			if tt.err != nil {
-				assert.Equal(t, tt.err, err)
+				assert.Contains(t, errs, tt.err)
 			} else {
 				assert.Equal(t, tt.expectedGauges, p.instrumentsByAddress[addrKey].gauges)
 				assert.Equal(t, tt.expectedCounters, p.instrumentsByAddress[addrKey].counters)
@@ -1163,7 +1180,9 @@ func TestStatsDParser_AggregateByAddress(t *testing.T) {
 			p.lastIntervalTime = time.Unix(611, 0)
 			for i, addr := range tt.addresses {
 				for _, line := range tt.input[i] {
-					assert.NoError(t, p.Aggregate(line, addr))
+					parsedMetric, err := (&Worker{enableMetricType: true}).Parse(line, addr)
+					assert.NoError(t, err)
+					assert.NoError(t, p.Aggregate(parsedMetric))
 				}
 			}
 			for i, addr := range tt.addresses {
@@ -1265,17 +1284,19 @@ func TestStatsDParser_AggregateWithMetricType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var err error
+			var aggregateErr error
 			p := &StatsDParser{}
 			assert.NoError(t, p.Initialize(true, false, false, false, []protocol.TimerHistogramMapping{{StatsdType: "timer", ObserverType: "gauge"}, {StatsdType: "histogram", ObserverType: "gauge"}}))
 			p.lastIntervalTime = time.Unix(611, 0)
 			addr, _ := net.ResolveUDPAddr("udp", "1.2.3.4:5678")
 			addrKey := newNetAddr(addr)
 			for _, line := range tt.input {
-				err = p.Aggregate(line, addr)
+				parsedMetric, err := (&Worker{enableMetricType: true}).Parse(line, addr)
+				assert.NoError(t, err)
+				aggregateErr = p.Aggregate(parsedMetric)
 			}
 			if tt.err != nil {
-				assert.Equal(t, tt.err, err)
+				assert.Equal(t, tt.err, aggregateErr)
 			} else {
 				assert.Equal(t, tt.expectedGauges, p.instrumentsByAddress[addrKey].gauges)
 				assert.Equal(t, tt.expectedCounters, p.instrumentsByAddress[addrKey].counters)
@@ -1335,17 +1356,19 @@ func TestStatsDParser_AggregateWithIsMonotonicCounter(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var err error
+			var aggregateErr error
 			p := &StatsDParser{}
 			assert.NoError(t, p.Initialize(false, false, true, false, []protocol.TimerHistogramMapping{{StatsdType: "timer", ObserverType: "gauge"}, {StatsdType: "histogram", ObserverType: "gauge"}}))
 			p.lastIntervalTime = time.Unix(611, 0)
 			addr, _ := net.ResolveUDPAddr("udp", "1.2.3.4:5678")
 			addrKey := newNetAddr(addr)
 			for _, line := range tt.input {
-				err = p.Aggregate(line, addr)
+				parsedMetric, err := (&Worker{}).Parse(line, addr)
+				assert.NoError(t, err)
+				aggregateErr = p.Aggregate(parsedMetric)
 			}
 			if tt.err != nil {
-				assert.Equal(t, tt.err, err)
+				assert.Equal(t, tt.err, aggregateErr)
 			} else {
 				assert.Equal(t, tt.expectedGauges, p.instrumentsByAddress[addrKey].gauges)
 				assert.Equal(t, tt.expectedCounters, p.instrumentsByAddress[addrKey].counters)
@@ -1462,16 +1485,18 @@ func TestStatsDParser_AggregateTimerWithSummary(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var err error
+			var aggregateErr error
 			p := &StatsDParser{}
 			assert.NoError(t, p.Initialize(false, false, false, false, []protocol.TimerHistogramMapping{{StatsdType: "timer", ObserverType: "summary"}, {StatsdType: "histogram", ObserverType: "summary", Summary: protocol.SummaryConfig{Percentiles: []float64{0, 95, 99}}}}))
 			addr, _ := net.ResolveUDPAddr("udp", "1.2.3.4:5678")
 			addrKey := newNetAddr(addr)
 			for _, line := range tt.input {
-				err = p.Aggregate(line, addr)
+				parsedMetric, err := (&Worker{}).Parse(line, addr)
+				assert.NoError(t, err)
+				aggregateErr = p.Aggregate(parsedMetric)
 			}
 			if tt.err != nil {
-				assert.Equal(t, tt.err, err)
+				assert.Equal(t, tt.err, aggregateErr)
 			} else {
 				assert.Equal(t, tt.expectedSummaries, p.instrumentsByAddress[addrKey].summaries)
 			}
@@ -1616,8 +1641,13 @@ func TestStatsDParser_Mappings(t *testing.T) {
 			assert.NoError(t, p.Initialize(false, false, false, false, tc.mapping))
 
 			addr, _ := net.ResolveUDPAddr("udp", "1.2.3.4:5678")
-			assert.NoError(t, p.Aggregate("H:10|h", addr))
-			assert.NoError(t, p.Aggregate("T:10|ms", addr))
+			worker := &Worker{}
+			parsedMetric, err := worker.Parse("H:10|h", addr)
+			assert.NoError(t, err)
+			assert.NoError(t, p.Aggregate(parsedMetric))
+			parsedMetric, err = worker.Parse("T:10|ms", addr)
+			assert.NoError(t, err)
+			assert.NoError(t, p.Aggregate(parsedMetric))
 
 			typeNames := map[string]string{}
 
@@ -1653,11 +1683,26 @@ func TestStatsDParser_ScopeIsIncluded(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	require.NoError(t, p.Aggregate("test.metric:1|c", testAddress))
-	require.NoError(t, p.Aggregate("test.metric:2|g", testAddress))
-	require.NoError(t, p.Aggregate("test.metric:42|h", testAddress))
-	require.NoError(t, p.Aggregate("statsdTestMetric1:1|ms|#mykey:myvalue", testAddress))
-	require.NoError(t, p.Aggregate("test.metric:-42|ms", testAddress))
+	worker := &Worker{enableMetricType: true}
+	parsedMetric, err := worker.Parse("test.metric:1|c", testAddress)
+	require.NoError(t, err)
+	require.NoError(t, p.Aggregate(parsedMetric))
+
+	parsedMetric, err = worker.Parse("test.metric:2|g", testAddress)
+	require.NoError(t, err)
+	require.NoError(t, p.Aggregate(parsedMetric))
+
+	parsedMetric, err = worker.Parse("test.metric:42|h", testAddress)
+	require.NoError(t, err)
+	require.NoError(t, p.Aggregate(parsedMetric))
+
+	parsedMetric, err = worker.Parse("statsdTestMetric1:1|ms|#mykey:myvalue", testAddress)
+	require.NoError(t, err)
+	require.NoError(t, p.Aggregate(parsedMetric))
+
+	parsedMetric, err = worker.Parse("test.metric:-42|ms", testAddress)
+	require.NoError(t, err)
+	require.NoError(t, p.Aggregate(parsedMetric))
 
 	metrics := p.GetMetrics()[0].Metrics
 
@@ -1913,12 +1958,13 @@ func TestStatsDParser_AggregateTimerWithHistogram(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var err error
 			p := &StatsDParser{}
 			assert.NoError(t, p.Initialize(false, false, false, false, tt.mapping))
 			addr, _ := net.ResolveUDPAddr("udp", "1.2.3.4:5678")
 			for _, line := range tt.input {
-				err = p.Aggregate(line, addr)
+				parsedMetric, err := (&Worker{}).Parse(line, addr)
+				assert.NoError(t, err)
+				err = p.Aggregate(parsedMetric)
 				assert.NoError(t, err)
 			}
 			var nodiffs []*metricstestutil.MetricDiff
@@ -1945,8 +1991,16 @@ func TestStatsDParser_IPOnlyAggregation(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	require.NoError(t, p.Aggregate("test.metric:1|c", testAddr01))
-	require.NoError(t, p.Aggregate("test.metric:3|c", testAddr02))
+
+	worker := &Worker{enableMetricType: true}
+
+	parsedMetric, err := worker.Parse("test.metric:1|c", testAddr01)
+	require.NoError(t, err)
+	require.NoError(t, p.Aggregate(parsedMetric))
+
+	parsedMetric, err = worker.Parse("test.metric:3|c", testAddr02)
+	require.NoError(t, err)
+	require.NoError(t, p.Aggregate(parsedMetric))
 	require.Len(t, p.instrumentsByAddress, 1)
 
 	for k := range p.instrumentsByAddress {

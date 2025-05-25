@@ -15,7 +15,7 @@ import (
 
 var statsDDefaultPercentiles = []float64{0, 10, 50, 90, 95, 100}
 
-func buildCounterMetric(parsedMetric statsDMetric, isMonotonicCounter bool) pmetric.ScopeMetrics {
+func buildCounterMetric(parsedMetric StatsDMetric, isMonotonicCounter bool) pmetric.ScopeMetrics {
 	ilm := pmetric.NewScopeMetrics()
 	nm := ilm.Metrics().AppendEmpty()
 	nm.SetName(parsedMetric.description.name)
@@ -48,7 +48,7 @@ func setTimestampsForCounterMetric(ilm pmetric.ScopeMetrics, startTime, timeNow 
 	}
 }
 
-func buildGaugeMetric(parsedMetric statsDMetric, timeNow time.Time) pmetric.ScopeMetrics {
+func buildGaugeMetric(parsedMetric StatsDMetric, timeNow time.Time) pmetric.ScopeMetrics {
 	ilm := pmetric.NewScopeMetrics()
 	nm := ilm.Metrics().AppendEmpty()
 	nm.SetName(parsedMetric.description.name)
@@ -142,7 +142,7 @@ func buildHistogramMetric(desc statsDMetricDescription, histogram histogramMetri
 	}
 }
 
-func (s statsDMetric) counterValue() int64 {
+func (s StatsDMetric) counterValue() int64 {
 	x := s.asFloat
 	// Note statds counters are always represented as integers.
 	// There is no statsd specification that says what should or
@@ -155,12 +155,12 @@ func (s statsDMetric) counterValue() int64 {
 	return int64(x)
 }
 
-func (s statsDMetric) gaugeValue() float64 {
+func (s StatsDMetric) gaugeValue() float64 {
 	// sampleRate does not have effect for gauge points.
 	return s.asFloat
 }
 
-func (s statsDMetric) sampleValue() sampleValue {
+func (s StatsDMetric) sampleValue() sampleValue {
 	count := 1.0
 	if 0 < s.sampleRate && s.sampleRate < 1 {
 		count /= s.sampleRate

@@ -4,6 +4,8 @@ statsd/receiver_settings:
   transport: "udp6"
   aggregation_interval: 70s
   enable_metric_type: false
+  processing_queue_size: 1000
+  num_parsing_workers: 10
   timer_histogram_mapping:
     - statsd_type: "histogram"
       observer_type: "gauge"

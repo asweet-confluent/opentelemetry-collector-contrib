@@ -21,7 +21,7 @@ func TestBuildCounterMetric(t *testing.T) {
 		attrs: attribute.NewSet(attribute.String("mykey", "myvalue")),
 	}
 
-	parsedMetric := statsDMetric{
+	parsedMetric := StatsDMetric{
 		description: metricDescription,
 		asFloat:     32,
 		unit:        "meter",
@@ -44,7 +44,7 @@ func TestSetTimestampsForCounterMetric(t *testing.T) {
 	timeNow := time.Now()
 	lastUpdateInterval := timeNow.Add(-1 * time.Minute)
 
-	parsedMetric := statsDMetric{}
+	parsedMetric := StatsDMetric{}
 	isMonotonicCounter := false
 	metric := buildCounterMetric(parsedMetric, isMonotonicCounter)
 	setTimestampsForCounterMetric(metric, lastUpdateInterval, timeNow)
@@ -74,7 +74,7 @@ func TestBuildGaugeMetric(t *testing.T) {
 			attribute.String("mykey2", "myvalue2"),
 		),
 	}
-	parsedMetric := statsDMetric{
+	parsedMetric := StatsDMetric{
 		description: metricDescription,
 		asFloat:     32.3,
 		unit:        "meter",

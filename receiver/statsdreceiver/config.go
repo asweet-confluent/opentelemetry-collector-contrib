@@ -25,6 +25,8 @@ type Config struct {
 	EnableSimpleTags        bool                             `mapstructure:"enable_simple_tags"`
 	IsMonotonicCounter      bool                             `mapstructure:"is_monotonic_counter"`
 	TimerHistogramMapping   []protocol.TimerHistogramMapping `mapstructure:"timer_histogram_mapping"`
+	ProcessingQueueSize     int                              `mapstructure:"processing_queue_size"`
+	NumParsingWorkers       int                              `mapstructure:"num_parsing_workers"`
 	// Will only be used when transport set to 'unixgram'.
 	SocketPermissions os.FileMode `mapstructure:"socket_permissions"`
 }
@@ -91,6 +93,14 @@ func (c *Config) Validate() error {
 
 	if TimerHistogramMappingMissingObjectName {
 		errs = multierr.Append(errs, errors.New("must specify object id for all TimerHistogramMappings"))
+	}
+
+	if c.ProcessingQueueSize < 1 {
+		errs = multierr.Append(errs, errors.New("processing_queue_size must be 1 or larger"))
+	}
+
+	if c.NumParsingWorkers < 1 {
+		errs = multierr.Append(errs, errors.New("num_parsing_workers must be 1 or larger"))
 	}
 
 	return errs

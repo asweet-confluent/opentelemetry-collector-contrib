@@ -101,6 +101,8 @@ func Test_statsdreceiver_EndToEnd(t *testing.T) {
 					},
 					SocketPermissions:   defaultSocketPermissions,
 					AggregationInterval: 4 * time.Second,
+					ProcessingQueueSize: 10,
+					NumParsingWorkers:   1,
 				}
 			},
 			clientFn: func(t *testing.T, addr string) *client.StatsD {
@@ -120,6 +122,8 @@ func Test_statsdreceiver_EndToEnd(t *testing.T) {
 					},
 					SocketPermissions:   defaultSocketPermissions,
 					AggregationInterval: 4 * time.Second,
+					ProcessingQueueSize: 10,
+					NumParsingWorkers:   1,
 				}
 			},
 			clientFn: func(t *testing.T, addr string) *client.StatsD {

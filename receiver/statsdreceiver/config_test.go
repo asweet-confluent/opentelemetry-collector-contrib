@@ -64,6 +64,8 @@ func TestLoadConfig(t *testing.T) {
 						},
 					},
 				},
+				ProcessingQueueSize: 1000,
+				NumParsingWorkers:   10,
 			},
 		},
 	}
@@ -107,6 +109,8 @@ func TestValidate(t *testing.T) {
 				TimerHistogramMapping: []protocol.TimerHistogramMapping{
 					{StatsdType: "timing", ObserverType: "gauge"},
 				},
+				ProcessingQueueSize: 10,
+				NumParsingWorkers:   3,
 			},
 			expectedErr: negativeAggregationIntervalErr,
 		},
@@ -117,6 +121,8 @@ func TestValidate(t *testing.T) {
 				TimerHistogramMapping: []protocol.TimerHistogramMapping{
 					{ObserverType: "gauge"},
 				},
+				ProcessingQueueSize: 10,
+				NumParsingWorkers:   3,
 			},
 			expectedErr: noObjectNameErr,
 		},
@@ -127,6 +133,8 @@ func TestValidate(t *testing.T) {
 				TimerHistogramMapping: []protocol.TimerHistogramMapping{
 					{StatsdType: "timing"},
 				},
+				ProcessingQueueSize: 10,
+				NumParsingWorkers:   3,
 			},
 			expectedErr: noObjectNameErr,
 		},
@@ -137,6 +145,8 @@ func TestValidate(t *testing.T) {
 				TimerHistogramMapping: []protocol.TimerHistogramMapping{
 					{StatsdType: "abc", ObserverType: "gauge"},
 				},
+				ProcessingQueueSize: 10,
+				NumParsingWorkers:   3,
 			},
 			expectedErr: fmt.Sprintf(statsdTypeNotSupportErr, "abc"),
 		},
@@ -147,6 +157,8 @@ func TestValidate(t *testing.T) {
 				TimerHistogramMapping: []protocol.TimerHistogramMapping{
 					{StatsdType: "timer", ObserverType: "gauge1"},
 				},
+				ProcessingQueueSize: 10,
+				NumParsingWorkers:   3,
 			},
 			expectedErr: fmt.Sprintf(observerTypeNotSupportErr, "gauge1"),
 		},
@@ -163,6 +175,8 @@ func TestValidate(t *testing.T) {
 						},
 					},
 				},
+				ProcessingQueueSize: 10,
+				NumParsingWorkers:   3,
 			},
 			expectedErr: invalidHistogramErr,
 		},
@@ -179,6 +193,8 @@ func TestValidate(t *testing.T) {
 						},
 					},
 				},
+				ProcessingQueueSize: 10,
+				NumParsingWorkers:   3,
 			},
 			expectedErr: invalidSummaryErr,
 		},
@@ -189,6 +205,8 @@ func TestValidate(t *testing.T) {
 				TimerHistogramMapping: []protocol.TimerHistogramMapping{
 					{StatsdType: "timing", ObserverType: "gauge"},
 				},
+				ProcessingQueueSize: 10,
+				NumParsingWorkers:   3,
 			},
 			expectedErr: negativeAggregationIntervalErr,
 		},
@@ -233,6 +251,8 @@ func TestConfig_Validate_HistogramGoodConfig(t *testing.T) {
 					},
 				},
 			},
+			ProcessingQueueSize: 10,
+			NumParsingWorkers:   3,
 		}
 		err := cfg.Validate()
 		assert.NoError(t, err)

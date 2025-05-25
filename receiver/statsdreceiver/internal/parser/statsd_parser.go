@@ -4,6 +4,7 @@
 package parser // import "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/statsdreceiver/internal/parser"
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -19,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.22.0"
 
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/statsdreceiver/internal/transport"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/statsdreceiver/protocol"
 )
 
@@ -100,12 +102,13 @@ type histogramMetric struct {
 	agg *histogramStructure
 }
 
-type statsDMetric struct {
+type StatsDMetric struct {
 	description statsDMetricDescription
 	asFloat     float64
 	addition    bool
 	unit        string
 	sampleRate  float64
+	addr        net.Addr
 	timestamp   uint64
 }
 
@@ -257,20 +260,16 @@ func (p *StatsDParser) observerCategoryFor(t MetricType) ObserverCategory {
 }
 
 // Aggregate for each metric line.
-func (p *StatsDParser) Aggregate(line string, addr net.Addr) error {
-	parsedMetric, err := parseMessageToMetric(line, p.enableMetricType, p.enableSimpleTags)
-	if err != nil {
-		return err
-	}
+func (p *StatsDParser) Aggregate(parsedMetric StatsDMetric) error {
 
-	addrKey := newNetAddr(addr)
+	addrKey := newNetAddr(parsedMetric.addr)
 	if p.enableIPOnlyAggregation {
-		addrKey = newIPOnlyNetAddr(addr)
+		addrKey = newIPOnlyNetAddr(parsedMetric.addr)
 	}
 
 	instrument, ok := p.instrumentsByAddress[addrKey]
 	if !ok {
-		instrument = newInstruments(addr)
+		instrument = newInstruments(parsedMetric.addr)
 		p.instrumentsByAddress[addrKey] = instrument
 	}
 
@@ -343,8 +342,33 @@ func (p *StatsDParser) Aggregate(line string, addr net.Addr) error {
 	return nil
 }
 
-func parseMessageToMetric(line string, enableMetricType bool, enableSimpleTags bool) (statsDMetric, error) {
-	result := statsDMetric{}
+type Worker struct {
+	enableMetricType bool
+	enableSimpleTags bool
+}
+
+func NewWorker(p Parser) Worker {
+	return Worker{
+		enableMetricType: p.(*StatsDParser).enableMetricType,
+		enableSimpleTags: p.(*StatsDParser).enableSimpleTags,
+	}
+}
+
+func (w *Worker) Work(ctx context.Context, readTransferChan chan transport.Metric, parserTransferChan chan StatsDMetric) {
+	for {
+		select {
+		case metric := <-readTransferChan:
+			parsedMetric, _ := w.Parse(metric.Raw, metric.Addr)
+			// TODO implement error logging
+			parserTransferChan <- parsedMetric
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (w *Worker) Parse(line string, addr net.Addr) (StatsDMetric, error) {
+	result := StatsDMetric{addr: addr}
 
 	nameValue, rest, foundName := strings.Cut(line, "|")
 	if !foundName {
@@ -410,7 +434,7 @@ func parseMessageToMetric(line string, enableMetricType bool, enableSimpleTags b
 
 				// support both simple tags (w/o value) and dimension tags (w/ value).
 				// dogstatsd notably allows simple tags.
-				if v == "" && !enableSimpleTags {
+				if v == "" && !w.enableSimpleTags {
 					return result, fmt.Errorf("invalid tag format: %q", tagSet)
 				}
 
@@ -449,7 +473,7 @@ func parseMessageToMetric(line string, enableMetricType bool, enableSimpleTags b
 	}
 
 	// add metric_type dimension for all metrics
-	if enableMetricType {
+	if w.enableMetricType {
 		metricType := string(result.description.metricType.FullName())
 
 		kvs = append(kvs, attribute.String(tagMetricType, metricType))

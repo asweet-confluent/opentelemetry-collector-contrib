@@ -106,7 +106,8 @@ func (r *statsdReceiver) Start(ctx context.Context, host component.Host) error {
 		return err
 	}
 	r.server = server
-	transferChan := make(chan transport.Metric, 10)
+	readTransferChan := make(chan transport.Metric, r.config.ProcessingQueueSize)
+	parserTransferChan := make(chan parser.StatsDMetric, r.config.ProcessingQueueSize)
 	ticker := time.NewTicker(r.config.AggregationInterval)
 	err = r.parser.Initialize(
 		r.config.EnableMetricType,
@@ -119,12 +120,18 @@ func (r *statsdReceiver) Start(ctx context.Context, host component.Host) error {
 		return err
 	}
 	go func() {
-		if err := r.server.ListenAndServe(r.nextConsumer, r.reporter, transferChan); err != nil {
+		if err := r.server.ListenAndServe(r.nextConsumer, r.reporter, readTransferChan); err != nil {
 			if !errors.Is(err, net.ErrClosed) {
 				componentstatus.ReportStatus(host, componentstatus.NewFatalErrorEvent(err))
 			}
 		}
 	}()
+
+	for i := 0; i < r.config.NumParsingWorkers; i++ {
+		worker := parser.NewWorker(r.parser)
+		go worker.Work(ctx, readTransferChan, parserTransferChan)
+	}
+
 	go func() {
 		var failCnt, successCnt int64
 		for {
@@ -141,8 +148,8 @@ func (r *statsdReceiver) Start(ctx context.Context, host component.Host) error {
 					}
 					r.obsrecv.EndMetricsOp(flushCtx, metadata.Type.String(), numPoints, err)
 				}
-			case metric := <-transferChan:
-				err := r.parser.Aggregate(metric.Raw, metric.Addr)
+			case metric := <-parserTransferChan:
+				err := r.parser.Aggregate(metric)
 				if err != nil {
 					failCnt++
 					if failCnt%100 == 0 {
