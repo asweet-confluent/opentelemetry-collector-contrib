@@ -42,6 +42,9 @@ The Following settings are optional:
 
 - `timer_histogram_mapping:`(default value is below): Specify what OTLP type to convert received timing/histogram data to.
 
+- `num_parsing_workers` (default = `3`): The number of goroutines used to parse StatsD messages.
+
+- `processing_queue_size` (default = `10`): The size of the queues used for communicating with the parsing workers. Each worker has two queues (input and output), so the total size of all queues is `2 * processing_queue_size * num_parsing_workers`.
 
 `"statsd_type"` specifies received Statsd data type. Possible values for this setting are `"timing"`, `"timer"`, `"histogram"` and `"distribution"`.
 
